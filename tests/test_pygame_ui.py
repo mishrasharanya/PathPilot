@@ -1,0 +1,31 @@
+import unittest
+
+from pathpilot.pygame_ui import Tool, calculate_layout, grid_position_at, toolbar_button_bounds
+
+
+class LayoutTests(unittest.TestCase):
+    def test_grid_uses_square_cells_and_fits_left_of_sidebar(self) -> None:
+        layout = calculate_layout(20, 15)
+        self.assertEqual(layout.grid_width, layout.cell_size * 20)
+        self.assertEqual(layout.grid_height, layout.cell_size * 15)
+        self.assertLessEqual(layout.grid_left + layout.grid_width, layout.sidebar_left)
+        self.assertLessEqual(layout.grid_top + layout.grid_height, layout.window_height)
+
+    def test_pixel_coordinates_map_to_grid_cells(self) -> None:
+        layout = calculate_layout(20, 15)
+        self.assertEqual(grid_position_at(layout, (layout.grid_left, layout.grid_top)), (0, 0))
+        self.assertEqual(
+            grid_position_at(
+                layout,
+                (layout.grid_left + layout.grid_width - 1, layout.grid_top + layout.grid_height - 1),
+            ),
+            (19, 14),
+        )
+        self.assertIsNone(grid_position_at(layout, (layout.grid_left - 1, layout.grid_top)))
+
+    def test_toolbar_buttons_do_not_overlap(self) -> None:
+        buttons = toolbar_button_bounds(calculate_layout(20, 15))
+        self.assertEqual(tuple(button.tool for button in buttons), tuple(Tool))
+        for current, following in zip(buttons, buttons[1:]):
+            self.assertLessEqual(current.top + current.height, following.top)
+

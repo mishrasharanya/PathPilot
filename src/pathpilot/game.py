@@ -2,8 +2,21 @@
 
 from __future__ import annotations
 
+from pathpilot.controllers import (
+    AlwaysReplanController,
+    CachedPathController,
+    NavigationState,
+    SearchVisualizationController,
+)
 from pathpilot.environment import Direction, GridEnvironment, MoveResult, Position
-from pathpilot.pygame_ui import PygameUI, SELECTABLE_TOOLS, Tool, WINDOW_SIZE
+from pathpilot.planning import AStarPlanner
+from pathpilot.ui import (
+    AIAction,
+    PygameUI,
+    SELECTABLE_TOOLS,
+    Tool,
+    WINDOW_SIZE,
+)
 
 
 def apply_grid_tool(
@@ -12,17 +25,31 @@ def apply_grid_tool(
     position: Position,
     *,
     erase: bool = False,
+    toggle: bool = False,
 ) -> str:
     """Apply one editing action and return a user-facing status message."""
     if tool is Tool.OBSTACLES:
-        changed = environment.remove_obstacle(position) if erase else environment.add_obstacle(position)
+        should_remove = erase or (toggle and position in environment.obstacles)
+        changed = (
+            environment.remove_obstacle(position)
+            if should_remove
+            else environment.add_obstacle(position)
+        )
         if changed:
-            return "Obstacle removed" if erase else "Obstacle added"
+            return "Obstacle removed" if should_remove else "Obstacle added"
         return "That cell cannot be changed"
     if tool is Tool.SET_START:
-        return "Start updated" if environment.set_start(position) else "Choose an empty non-goal cell"
+        return (
+            "Start updated"
+            if environment.set_start(position)
+            else "Choose an empty non-goal cell"
+        )
     if tool is Tool.SET_GOAL:
-        return "Goal updated" if environment.set_goal(position) else "Choose an empty non-start cell"
+        return (
+            "Goal updated"
+            if environment.set_goal(position)
+            else "Choose an empty non-start cell"
+        )
     return "Select an editing tool to change the grid"
 
 
@@ -44,6 +71,14 @@ def main() -> None:
     clock = pygame.time.Clock()
     environment = GridEnvironment()
     ui = PygameUI(surface, environment)
+    planner = AStarPlanner()
+    visualization = SearchVisualizationController()
+    baseline = AlwaysReplanController()
+    cached = CachedPathController()
+    navigation_controllers = (
+        ("Baseline", baseline),
+        ("Cached", cached),
+    )
     active_tool = Tool.OBSTACLES
     status = "Draw obstacles or choose another tool"
     running = True
@@ -67,6 +102,7 @@ def main() -> None:
 
     try:
         while running:
+            elapsed_ms = clock.tick(60)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -78,36 +114,113 @@ def main() -> None:
                         status = f"{active_tool.value} mode selected"
                     elif event.key in key_directions:
                         if active_tool is Tool.PLAY:
+                            visualization.stop()
+                            for _, controller in navigation_controllers:
+                                controller.stop()
                             status = movement_status(environment.move(key_directions[event.key]))
                         else:
                             status = "Select Play before moving the agent"
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     selected = ui.tool_at(event.pos)
+                    ai_action = ui.ai_action_at(event.pos)
                     if selected in SELECTABLE_TOOLS:
                         active_tool = selected
                         status = f"{selected.value} mode selected"
                     elif selected is Tool.RESET_AGENT:
+                        visualization.stop()
+                        for _, controller in navigation_controllers:
+                            controller.stop()
                         environment.reset_agent()
                         status = "Agent returned to start"
                     elif selected is Tool.CLEAR_GRID:
+                        visualization.stop()
+                        for _, controller in navigation_controllers:
+                            controller.stop()
                         environment.reset()
                         active_tool = Tool.OBSTACLES
                         status = "Grid cleared"
+                    elif ai_action is AIAction.START:
+                        for _, controller in navigation_controllers:
+                            controller.stop()
+                        result = planner.plan(
+                            environment,
+                            environment.agent,
+                            environment.goal,
+                        )
+                        visualization.start(result)
+                        latency_ms = result.planning_latency_ns / 1_000_000
+                        status = (
+                            f"A*: {result.nodes_explored} nodes · "
+                            f"{latency_ms:.3f} ms"
+                            if result.success
+                            else f"No path · {result.nodes_explored} nodes explored"
+                        )
+                    elif ai_action is AIAction.RUN_BASELINE:
+                        visualization.stop()
+                        cached.stop()
+                        baseline.start(environment)
+                        status = "Always-Replan baseline started"
+                    elif ai_action is AIAction.RUN_CACHED:
+                        visualization.stop()
+                        baseline.stop()
+                        cached.start(environment)
+                        status = "Cached-Path navigation started"
+                    elif ai_action is AIAction.PAUSE:
+                        active_navigation = next(
+                            (
+                                (name, controller)
+                                for name, controller in navigation_controllers
+                                if controller.is_active
+                            ),
+                            None,
+                        )
+                        if active_navigation is not None:
+                            name, controller = active_navigation
+                            paused = controller.toggle_pause()
+                            status = (
+                                f"{name} paused"
+                                if paused
+                                else f"{name} resumed"
+                            )
+                        elif visualization.is_active:
+                            paused = visualization.toggle_pause()
+                            status = (
+                                "Visualization paused"
+                                if paused
+                                else "Visualization resumed"
+                            )
+                        else:
+                            status = "Start an A* visualization first"
+                    elif ai_action is AIAction.STOP:
+                        visualization.stop()
+                        for _, controller in navigation_controllers:
+                            controller.stop()
+                        status = "AI navigation stopped"
                     else:
                         position = ui.grid_position_at(event.pos)
                         if position is not None and event.button in (1, 3):
+                            visualization.stop()
                             status = apply_grid_tool(
                                 environment,
                                 active_tool,
                                 position,
                                 erase=event.button == 3,
+                                toggle=event.button == 1,
                             )
-                            if active_tool in {Tool.SET_START, Tool.SET_GOAL} and status.endswith("updated"):
+                            endpoint_changed = (
+                                active_tool in {Tool.SET_START, Tool.SET_GOAL}
+                                and status.endswith("updated")
+                            )
+                            if endpoint_changed:
+                                for _, controller in navigation_controllers:
+                                    controller.stop()
+                            if endpoint_changed:
                                 active_tool = Tool.OBSTACLES
                                 status += " · Obstacles mode restored"
                 elif event.type == pygame.MOUSEMOTION and active_tool is Tool.OBSTACLES:
                     position = ui.grid_position_at(event.pos)
                     if position is not None and (event.buttons[0] or event.buttons[2]):
+                        visualization.stop()
                         status = apply_grid_tool(
                             environment,
                             active_tool,
@@ -115,9 +228,81 @@ def main() -> None:
                             erase=bool(event.buttons[2]),
                         )
 
-            ui.draw(environment, active_tool, status, pygame.mouse.get_pos())
+            visualization.update(elapsed_ms)
+            for name, controller in navigation_controllers:
+                previous_plans = controller.metrics.planning_calls
+                previous_state = controller.state
+                controller.update(elapsed_ms, environment)
+                if controller.metrics.planning_calls > previous_plans:
+                    status = (
+                        f"{name} plan {controller.metrics.planning_calls} · "
+                        f"{controller.metrics.nodes_explored} total nodes"
+                    )
+                just_succeeded = (
+                    controller.state is NavigationState.SUCCEEDED
+                    and previous_state is not NavigationState.SUCCEEDED
+                )
+                just_failed = (
+                    controller.state is NavigationState.FAILED
+                    and previous_state is not NavigationState.FAILED
+                )
+                if just_succeeded:
+                    status = f"{name} reached the goal"
+                elif just_failed:
+                    status = f"{name} could not find a path"
+
+            frame = visualization.frame
+            current_navigation = next(
+                (
+                    controller
+                    for _, controller in reversed(navigation_controllers)
+                    if controller.state is not NavigationState.IDLE
+                ),
+                None,
+            )
+            if current_navigation is not None:
+                visualization_status = current_navigation.state.value
+            else:
+                visualization_status = (
+                    "Paused" if frame.paused else frame.phase.value
+                )
+            if current_navigation is not None and current_navigation.latest_result:
+                explored_cells = current_navigation.latest_result.explored_cells
+                path = (
+                    current_navigation.remaining_path
+                    if isinstance(current_navigation, CachedPathController)
+                    else current_navigation.latest_result.path
+                )
+            else:
+                explored_cells = frame.explored_cells
+                path = frame.path
+            metrics = (
+                current_navigation.metrics
+                if current_navigation is not None
+                else baseline.metrics
+            )
+            navigation_metrics = (
+                (
+                    ("Plans", str(metrics.planning_calls)),
+                    ("Replans", str(metrics.replanning_count)),
+                    ("Nodes", str(metrics.nodes_explored)),
+                    ("Moves", str(metrics.path_length)),
+                    ("Planning", f"{metrics.planning_latency_ms:.3f} ms"),
+                )
+                if current_navigation is not None
+                else ()
+            )
+            ui.draw(
+                environment,
+                active_tool,
+                status,
+                pygame.mouse.get_pos(),
+                explored_cells=explored_cells,
+                path=path,
+                visualization_status=visualization_status,
+                navigation_metrics=navigation_metrics,
+            )
             pygame.display.flip()
-            clock.tick(60)
     finally:
         pygame.quit()
 

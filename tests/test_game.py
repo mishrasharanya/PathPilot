@@ -2,7 +2,7 @@ import unittest
 
 from pathpilot.environment import GridEnvironment, MoveResult
 from pathpilot.game import apply_grid_tool, movement_status
-from pathpilot.pygame_ui import Tool
+from pathpilot.ui import Tool
 
 
 class GameControlTests(unittest.TestCase):
@@ -14,6 +14,27 @@ class GameControlTests(unittest.TestCase):
             apply_grid_tool(environment, Tool.OBSTACLES, (1, 1), erase=True),
             "Obstacle removed",
         )
+
+    def test_left_click_toggles_existing_obstacle_off(self) -> None:
+        environment = GridEnvironment(width=4, height=4)
+        apply_grid_tool(environment, Tool.OBSTACLES, (1, 1), toggle=True)
+
+        result = apply_grid_tool(
+            environment,
+            Tool.OBSTACLES,
+            (1, 1),
+            toggle=True,
+        )
+
+        self.assertEqual(result, "Obstacle removed")
+        self.assertNotIn((1, 1), environment.obstacles)
+
+    def test_painting_existing_obstacle_does_not_toggle_it(self) -> None:
+        environment = GridEnvironment(width=4, height=4, obstacles={(1, 1)})
+
+        apply_grid_tool(environment, Tool.OBSTACLES, (1, 1))
+
+        self.assertIn((1, 1), environment.obstacles)
 
     def test_start_and_goal_tools_update_environment(self) -> None:
         environment = GridEnvironment(width=4, height=4)

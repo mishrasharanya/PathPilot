@@ -1,6 +1,13 @@
 import unittest
 
-from pathpilot.pygame_ui import Tool, calculate_layout, grid_position_at, toolbar_button_bounds
+from pathpilot.ui import (
+    AIAction,
+    Tool,
+    ai_button_bounds,
+    calculate_layout,
+    grid_position_at,
+    toolbar_button_bounds,
+)
 
 
 class LayoutTests(unittest.TestCase):
@@ -28,4 +35,14 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(tuple(button.tool for button in buttons), tuple(Tool))
         for current, following in zip(buttons, buttons[1:]):
             self.assertLessEqual(current.top + current.height, following.top)
+
+    def test_ai_buttons_fit_sidebar_without_overlap(self) -> None:
+        layout = calculate_layout(20, 15)
+        buttons = ai_button_bounds(layout)
+        self.assertEqual(tuple(button.action for button in buttons), tuple(AIAction))
+        self.assertLessEqual(buttons[0].left + buttons[0].width, buttons[1].left)
+        self.assertLessEqual(buttons[1].left + buttons[1].width, buttons[2].left)
+        self.assertLessEqual(buttons[0].top + buttons[0].height, buttons[3].top)
+        self.assertLessEqual(buttons[3].left + buttons[3].width, buttons[4].left)
+        self.assertLessEqual(buttons[-1].top + buttons[-1].height, layout.window_height)
 

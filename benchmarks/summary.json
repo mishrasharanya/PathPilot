@@ -1,0 +1,27 @@
+{
+  "always_replan": {
+    "runs": 30.0,
+    "success_rate": 1,
+    "planning_latency_ms_mean": 2.3820284333333333,
+    "planning_latency_ms_median": 2.399687,
+    "nodes_explored_mean": 1359,
+    "path_length_mean": 48,
+    "planning_calls_mean": 48,
+    "replanning_count_mean": 47
+  },
+  "cached_path": {
+    "runs": 30.0,
+    "success_rate": 1,
+    "planning_latency_ms_mean": 0.18077503333333333,
+    "planning_latency_ms_median": 0.18595899999999999,
+    "nodes_explored_mean": 100,
+    "path_length_mean": 48,
+    "planning_calls_mean": 2,
+    "replanning_count_mean": 1
+  },
+  "comparison": {
+    "latency_reduction_percent": 92.41087844277482,
+    "node_reduction_percent": 92.64164827078734,
+    "planning_call_reduction_percent": 95.83333333333334
+  }
+}

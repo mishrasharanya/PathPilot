@@ -18,6 +18,21 @@ class GridEnvironmentTests(unittest.TestCase):
         self.assertEqual(result, MoveResult.MOVED)
         self.assertEqual(environment.agent, (1, 0))
 
+    def test_neighbors_exclude_obstacles_and_grid_boundaries(self) -> None:
+        environment = GridEnvironment(
+            width=3,
+            height=3,
+            obstacles={(1, 0)},
+        )
+        self.assertEqual(environment.neighbors((0, 0)), ((0, 1),))
+
+    def test_neighbors_have_deterministic_order(self) -> None:
+        environment = GridEnvironment(width=3, height=3)
+        self.assertEqual(
+            environment.neighbors((1, 1)),
+            ((2, 1), (1, 2), (0, 1), (1, 0)),
+        )
+
     def test_agent_cannot_leave_grid(self) -> None:
         environment = GridEnvironment(width=3, height=3)
         result = environment.move(Direction.UP)

@@ -73,6 +73,25 @@ class GridEnvironment:
         column, row = position
         return 0 <= column < self.width and 0 <= row < self.height
 
+    def is_traversable(self, position: Position) -> bool:
+        """Return whether a position is inside the grid and not blocked."""
+        return self.in_bounds(position) and position not in self.obstacles
+
+    def neighbors(self, position: Position) -> tuple[Position, ...]:
+        """Return traversable adjacent cells in deterministic search order."""
+        column, row = position
+        candidates = (
+            (column + 1, row),
+            (column, row + 1),
+            (column - 1, row),
+            (column, row - 1),
+        )
+        return tuple(
+            candidate
+            for candidate in candidates
+            if self.is_traversable(candidate)
+        )
+
     @property
     def reached_goal(self) -> bool:
         return self.agent == self.goal

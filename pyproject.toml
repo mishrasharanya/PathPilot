@@ -14,6 +14,7 @@ dependencies = ["pygame-ce>=2.5,<3"]
 
 [project.scripts]
 pathpilot = "pathpilot.game:main"
+pathpilot-benchmark = "pathpilot.evaluation.benchmark:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

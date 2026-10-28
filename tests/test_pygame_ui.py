@@ -42,7 +42,8 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(tuple(button.action for button in buttons), tuple(AIAction))
         self.assertLessEqual(buttons[0].left + buttons[0].width, buttons[1].left)
         self.assertLessEqual(buttons[1].left + buttons[1].width, buttons[2].left)
-        self.assertLessEqual(buttons[0].top + buttons[0].height, buttons[3].top)
-        self.assertLessEqual(buttons[3].left + buttons[3].width, buttons[4].left)
+        self.assertLessEqual(buttons[2].left + buttons[2].width, buttons[3].left)
+        self.assertLessEqual(buttons[0].top + buttons[0].height, buttons[4].top)
+        self.assertLessEqual(buttons[4].left + buttons[4].width, buttons[5].left)
         self.assertLessEqual(buttons[-1].top + buttons[-1].height, layout.window_height)
 

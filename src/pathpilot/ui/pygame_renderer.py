@@ -303,7 +303,7 @@ class PygameUI:
                     ),
                 )
 
-        ai_label = self.small_font.render("A* VISUALIZATION", True, self.MUTED)
+        ai_label = self.small_font.render("AI NAVIGATION", True, self.MUTED)
         self.surface.blit(ai_label, (panel.left + 20, panel.top + 397))
         for bounds in ai_button_bounds(self.layout):
             rectangle = pygame.Rect(
@@ -314,6 +314,7 @@ class PygameUI:
                 AIAction.START,
                 AIAction.RUN_BASELINE,
                 AIAction.RUN_CACHED,
+                AIAction.RUN_CNN,
             }:
                 color = self.START if not is_hovered else (29, 202, 143)
             elif is_hovered:
@@ -323,7 +324,12 @@ class PygameUI:
             pygame.draw.rect(
                 self.surface, color, rectangle, border_radius=10
             )
-            label_text = bounds.action.value
+            label_text = {
+                AIAction.START: "Plan",
+                AIAction.RUN_BASELINE: "V1",
+                AIAction.RUN_CACHED: "V2",
+                AIAction.RUN_CNN: "CNN",
+            }.get(bounds.action, bounds.action.value)
             if bounds.action is AIAction.PAUSE and visualization_status == "Paused":
                 label_text = "Resume"
             label = self.small_font.render(label_text, True, self.TEXT)

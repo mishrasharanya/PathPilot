@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pathpilot.controllers import (
     AlwaysReplanController,
     CachedPathController,
+    CNNNavigationController,
     NavigationState,
     SearchVisualizationController,
 )
@@ -75,10 +78,29 @@ def main() -> None:
     visualization = SearchVisualizationController()
     baseline = AlwaysReplanController()
     cached = CachedPathController()
-    navigation_controllers = (
+    cnn: CNNNavigationController | None = None
+    cnn_unavailable_reason = "Train the CNN checkpoint first"
+    checkpoint_path = Path("artifacts/models/cnn-v1/best_model.pt")
+    try:
+        from pathpilot.learning.inference import TorchCNNPolicy
+
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(checkpoint_path)
+        cnn = CNNNavigationController(TorchCNNPolicy(checkpoint_path))
+        cnn_unavailable_reason = ""
+    except ImportError:
+        cnn_unavailable_reason = "Install PathPilot with the ML dependencies"
+    except FileNotFoundError:
+        cnn_unavailable_reason = "Train the CNN checkpoint first"
+    except (RuntimeError, ValueError) as error:
+        cnn_unavailable_reason = f"CNN unavailable: {error}"
+
+    navigation_controllers = [
         ("Baseline", baseline),
         ("Cached", cached),
-    )
+    ]
+    if cnn is not None:
+        navigation_controllers.append(("CNN", cnn))
     active_tool = Tool.OBSTACLES
     status = "Draw obstacles or choose another tool"
     running = True
@@ -158,13 +180,29 @@ def main() -> None:
                     elif ai_action is AIAction.RUN_BASELINE:
                         visualization.stop()
                         cached.stop()
+                        if cnn is not None:
+                            cnn.stop()
                         baseline.start(environment)
                         status = "Always-Replan baseline started"
                     elif ai_action is AIAction.RUN_CACHED:
                         visualization.stop()
                         baseline.stop()
+                        if cnn is not None:
+                            cnn.stop()
                         cached.start(environment)
                         status = "Cached-Path navigation started"
+                    elif ai_action is AIAction.RUN_CNN:
+                        visualization.stop()
+                        baseline.stop()
+                        cached.stop()
+                        if cnn is None:
+                            status = cnn_unavailable_reason
+                        else:
+                            try:
+                                cnn.start(environment)
+                                status = "CNN navigation started"
+                            except ValueError as error:
+                                status = str(error)
                     elif ai_action is AIAction.PAUSE:
                         active_navigation = next(
                             (
@@ -190,7 +228,7 @@ def main() -> None:
                                 else "Visualization resumed"
                             )
                         else:
-                            status = "Start an A* visualization first"
+                            status = "Start an AI navigation mode first"
                     elif ai_action is AIAction.STOP:
                         visualization.stop()
                         for _, controller in navigation_controllers:
@@ -230,10 +268,17 @@ def main() -> None:
 
             visualization.update(elapsed_ms)
             for name, controller in navigation_controllers:
-                previous_plans = controller.metrics.planning_calls
+                previous_calls = (
+                    controller.metrics.inference_calls
+                    if isinstance(controller, CNNNavigationController)
+                    else controller.metrics.planning_calls
+                )
                 previous_state = controller.state
                 controller.update(elapsed_ms, environment)
-                if controller.metrics.planning_calls > previous_plans:
+                if (
+                    not isinstance(controller, CNNNavigationController)
+                    and controller.metrics.planning_calls > previous_calls
+                ):
                     status = (
                         f"{name} plan {controller.metrics.planning_calls} · "
                         f"{controller.metrics.nodes_explored} total nodes"
@@ -249,7 +294,11 @@ def main() -> None:
                 if just_succeeded:
                     status = f"{name} reached the goal"
                 elif just_failed:
-                    status = f"{name} could not find a path"
+                    status = (
+                        "CNN stopped: invalid action, loop, or step limit"
+                        if isinstance(controller, CNNNavigationController)
+                        else f"{name} could not find a path"
+                    )
 
             frame = visualization.frame
             current_navigation = next(
@@ -276,22 +325,26 @@ def main() -> None:
             else:
                 explored_cells = frame.explored_cells
                 path = frame.path
-            metrics = (
-                current_navigation.metrics
-                if current_navigation is not None
-                else baseline.metrics
-            )
-            navigation_metrics = (
-                (
+            if isinstance(current_navigation, CNNNavigationController):
+                cnn_metrics = current_navigation.metrics
+                navigation_metrics = (
+                    ("Decisions", str(cnn_metrics.inference_calls)),
+                    ("Moves", str(cnn_metrics.path_length)),
+                    ("Invalid", str(cnn_metrics.invalid_actions)),
+                    ("Encoding", f"{cnn_metrics.encoding_latency_ms:.3f} ms"),
+                    ("Inference", f"{cnn_metrics.inference_latency_ms:.3f} ms"),
+                )
+            elif current_navigation is not None:
+                metrics = current_navigation.metrics
+                navigation_metrics = (
                     ("Plans", str(metrics.planning_calls)),
                     ("Replans", str(metrics.replanning_count)),
                     ("Nodes", str(metrics.nodes_explored)),
                     ("Moves", str(metrics.path_length)),
                     ("Planning", f"{metrics.planning_latency_ms:.3f} ms"),
                 )
-                if current_navigation is not None
-                else ()
-            )
+            else:
+                navigation_metrics = ()
             ui.draw(
                 environment,
                 active_tool,

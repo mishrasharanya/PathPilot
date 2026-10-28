@@ -26,11 +26,12 @@ class Tool(Enum):
 
 
 class AIAction(Enum):
-    """Immediate controls for A* visualization playback."""
+    """Immediate controls for AI visualization and navigation."""
 
     START = "Plan A*"
     RUN_BASELINE = "Baseline"
     RUN_CACHED = "Cached"
+    RUN_CNN = "CNN"
     PAUSE = "Pause"
     STOP = "Stop"
 
@@ -156,21 +157,28 @@ def ai_button_bounds(layout: Layout) -> tuple[AIButtonBounds, ...]:
     usable_width = SIDEBAR_WIDTH - 36
     section_top = layout.sidebar_top + 420
     half_width = (usable_width - 8) // 2
-    third_width = (usable_width - 16) // 3
+    quarter_width = (usable_width - 24) // 4
     return (
-        AIButtonBounds(AIAction.START, left, section_top, third_width, 40),
+        AIButtonBounds(AIAction.START, left, section_top, quarter_width, 40),
         AIButtonBounds(
             AIAction.RUN_BASELINE,
-            left + third_width + 8,
+            left + quarter_width + 8,
             section_top,
-            third_width,
+            quarter_width,
             40,
         ),
         AIButtonBounds(
             AIAction.RUN_CACHED,
-            left + 2 * (third_width + 8),
+            left + 2 * (quarter_width + 8),
             section_top,
-            third_width,
+            quarter_width,
+            40,
+        ),
+        AIButtonBounds(
+            AIAction.RUN_CNN,
+            left + 3 * (quarter_width + 8),
+            section_top,
+            quarter_width,
             40,
         ),
         AIButtonBounds(AIAction.PAUSE, left, section_top + 48, half_width, 38),

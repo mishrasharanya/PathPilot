@@ -17,7 +17,7 @@ class NavigationState(Enum):
     RUNNING = "Running"
     PAUSED = "Paused"
     SUCCEEDED = "Succeeded"
-    FAILED = "No path"
+    FAILED = "Failed"
 
 
 class TimedNavigationController(ABC):

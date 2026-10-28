@@ -12,9 +12,14 @@ requires-python = ">=3.10"
 # range, including Python 3.14 used by the development environment.
 dependencies = ["pygame-ce>=2.5,<3"]
 
+[project.optional-dependencies]
+ml = ["numpy>=2,<3", "torch>=2.7,<3"]
+
 [project.scripts]
 pathpilot = "pathpilot.game:main"
 pathpilot-benchmark = "pathpilot.evaluation.benchmark:main"
+pathpilot-generate-data = "pathpilot.learning.generator:main"
+pathpilot-train = "pathpilot.learning.train_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
